@@ -11,8 +11,11 @@ AvatarCam is an Android prototype for selecting a photo avatar and probing the d
 - Check whether the app actually holds Android's privileged `CREATE_VIRTUAL_DEVICE` permission.
 - Avoid falsely reporting “activated” when Android has blocked the system-wide path.
 
+## Android 17 compatibility
+The app currently compiles and targets stable API 36 so the GitHub hosted build can produce an APK reliably. On an Android 17 / API 37 device it still probes the Android 17 virtual-camera extension at runtime using reflection, so the compatibility result comes from the phone's actual firmware rather than the compile SDK.
+
 ## Important Android limitation
-Android virtual cameras sit behind the Virtual Device Manager. Creating a virtual device requires Android's `CREATE_VIRTUAL_DEVICE` permission, which normal third-party APKs cannot simply request at runtime. The device may support the camera framework while still refusing a regular APK permission to create the host virtual device.
+Android virtual cameras sit behind the Virtual Device Manager. The device may support the virtual-camera framework while still refusing a normal third-party APK the privileged system capability needed to create the host virtual device.
 
 That means the eventual system-wide mode needs one of these routes on the target phone:
 1. an OEM/system-supported role that grants the virtual-device capability, or
@@ -21,7 +24,7 @@ That means the eventual system-wide mode needs one of these routes on the target
 The app is deliberately structured so the avatar renderer/UI stays separate from that privileged helper.
 
 ## Build
-Current project settings target Android 17 / API 37 with Android Gradle Plugin 9.4.0 and Gradle 9.6.0.
+Current project settings use Android Gradle Plugin 9.4.0, Gradle 9.6.0 and JDK 17.
 
 A GitHub Actions workflow is included. On every push it builds a debug APK and publishes it as the `AvatarCam-debug-apk` workflow artifact.
 

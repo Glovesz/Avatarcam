@@ -9,7 +9,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
+import android.provider.MediaStore;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -21,11 +21,11 @@ import android.widget.Toast;
 public class MainActivity extends Activity {
     private static final int PICK_IMAGE = 41;
     private static final int CAMERA_PERMISSION = 42;
+    private static final int TEST_CAMERA = 43;
 
     private ImageView preview;
     private TextView avatarState;
-    private TextView compatibility;
-    private Button activate;
+    private Button testChooser;
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
@@ -55,10 +55,9 @@ public class MainActivity extends Activity {
         Bitmap saved = AvatarStore.load(this);
         if (saved != null) {
             preview.setImageBitmap(saved);
-            avatarState.setText("Avatar ready • stored on this phone");
-            activate.setEnabled(true);
+            avatarState.setText("Avatar ready • camera chooser mode enabled");
+            testChooser.setEnabled(true);
         }
-        refreshCompatibility();
     }
 
     private void buildUi() {
@@ -66,6 +65,7 @@ public class MainActivity extends Activity {
         int muted = Color.rgb(182, 182, 192);
         int bg = Color.rgb(10, 10, 12);
         int panel = Color.rgb(23, 23, 27);
+        int accent = Color.rgb(217, 255, 104);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT_BOLD);
         root.addView(title);
 
-        TextView subtitle = text("Use a chosen avatar as your camera image where Android allows it.", 16, muted);
+        TextView subtitle = text("Choose an avatar, then select AvatarCam whenever Android offers a camera-app chooser.", 16, muted);
         LinearLayout.LayoutParams subP = new LinearLayout.LayoutParams(-1, -2);
         subP.setMargins(0, dp(6), 0, dp(20));
         root.addView(subtitle, subP);
@@ -101,31 +101,33 @@ public class MainActivity extends Activity {
         choose.setOnClickListener(v -> pickAvatar());
         root.addView(choose, new LinearLayout.LayoutParams(-1, -2));
 
-        Button camera = button("Allow front camera for animation");
+        testChooser = button("Test camera chooser");
+        testChooser.setEnabled(false);
+        testChooser.setOnClickListener(v -> testCameraChooser());
+        LinearLayout.LayoutParams testP = new LinearLayout.LayoutParams(-1, -2);
+        testP.setMargins(0, dp(8), 0, 0);
+        root.addView(testChooser, testP);
+
+        TextView enabled = text("✓ Camera chooser mode enabled", 18, accent);
+        enabled.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams enabledP = new LinearLayout.LayoutParams(-1, -2);
+        enabledP.setMargins(0, dp(22), 0, dp(6));
+        root.addView(enabled, enabledP);
+
+        TextView help = text(
+                "When another app asks Android to take a photo using a camera app, choose AvatarCam from the chooser. AvatarCam will return your saved avatar as the captured image. Apps that open the physical camera hardware directly do not show this chooser.",
+                15, muted);
+        help.setPadding(dp(16), dp(16), dp(16), dp(16));
+        help.setBackgroundColor(panel);
+        root.addView(help, new LinearLayout.LayoutParams(-1, -2));
+
+        Button camera = button("Allow front camera for future animation");
         camera.setOnClickListener(v -> requestAnimationCamera());
         LinearLayout.LayoutParams cameraP = new LinearLayout.LayoutParams(-1, -2);
-        cameraP.setMargins(0, dp(8), 0, 0);
+        cameraP.setMargins(0, dp(16), 0, 0);
         root.addView(camera, cameraP);
 
-        TextView compTitle = text("Camera compatibility", 20, white);
-        compTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams compTitleP = new LinearLayout.LayoutParams(-1, -2);
-        compTitleP.setMargins(0, dp(24), 0, dp(8));
-        root.addView(compTitle, compTitleP);
-
-        compatibility = text("Checking…", 15, muted);
-        compatibility.setPadding(dp(16), dp(16), dp(16), dp(16));
-        compatibility.setBackgroundColor(panel);
-        root.addView(compatibility, new LinearLayout.LayoutParams(-1, -2));
-
-        activate = button("Activate AvatarCam");
-        activate.setEnabled(false);
-        activate.setOnClickListener(v -> activate());
-        LinearLayout.LayoutParams actP = new LinearLayout.LayoutParams(-1, -2);
-        actP.setMargins(0, dp(16), 0, 0);
-        root.addView(activate, actP);
-
-        TextView privacy = text("Use real people's likenesses only with permission. AvatarCam does not attempt to bypass biometric or identity verification.", 12, muted);
+        TextView privacy = text("Use real people's likenesses only with permission. AvatarCam is not intended to bypass biometric or identity verification.", 12, muted);
         LinearLayout.LayoutParams privacyP = new LinearLayout.LayoutParams(-1, -2);
         privacyP.setMargins(0, dp(16), 0, 0);
         root.addView(privacy, privacyP);
@@ -140,6 +142,16 @@ public class MainActivity extends Activity {
         startActivityForResult(i, PICK_IMAGE);
     }
 
+    private void testCameraChooser() {
+        Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        Intent chooser = Intent.createChooser(cameraIntent, "Choose camera");
+        try {
+            startActivityForResult(chooser, TEST_CAMERA);
+        } catch (Exception e) {
+            Toast.makeText(this, "No compatible camera apps were found.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void requestAnimationCamera() {
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Front-camera permission is already enabled.", Toast.LENGTH_SHORT).show();
@@ -151,59 +163,33 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != PICK_IMAGE || resultCode != RESULT_OK || data == null) return;
-        Uri uri = data.getData();
-        if (uri == null) return;
-        try {
-            Bitmap b = AvatarStore.importFromUri(this, uri);
-            preview.setImageBitmap(b);
-            avatarState.setText("Avatar ready • stored on this phone");
-            activate.setEnabled(true);
-        } catch (Exception e) {
-            Toast.makeText(this, "Could not import image: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-    }
 
-    private void refreshCompatibility() {
-        VirtualCameraProbe.Result r = VirtualCameraProbe.run(this);
-        String api;
-        switch (r.state) {
-            case SUPPORTED: api = "Virtual-camera framework: SUPPORTED ✓"; break;
-            case UNSUPPORTED: api = "Virtual-camera framework: not supported by this firmware"; break;
-            case API_NOT_PRESENT: api = "Virtual-camera API extension: not present"; break;
-            default: api = "Virtual-camera check: error"; break;
-        }
-        String permission = r.hasPrivilegedPermission
-                ? "Virtual-device role permission: GRANTED ✓"
-                : "Virtual-device role permission: not granted";
-        String config = r.configClassPresent
-                ? "VirtualCameraConfig class: present"
-                : "VirtualCameraConfig class: unavailable";
-        compatibility.setText(api + "\n" + permission + "\n" + config + "\n\n" + r.detail);
-    }
-
-    private void activate() {
-        VirtualCameraProbe.Result r = VirtualCameraProbe.run(this);
-        if (r.state == VirtualCameraProbe.State.SUPPORTED && r.hasPrivilegedPermission) {
-            Toast.makeText(this, "Virtual-camera host is available. The next build can attach the avatar renderer.", Toast.LENGTH_LONG).show();
+        if (requestCode == PICK_IMAGE && resultCode == RESULT_OK && data != null) {
+            Uri uri = data.getData();
+            if (uri == null) return;
+            try {
+                Bitmap b = AvatarStore.importFromUri(this, uri);
+                preview.setImageBitmap(b);
+                avatarState.setText("Avatar ready • camera chooser mode enabled");
+                testChooser.setEnabled(true);
+            } catch (Exception e) {
+                Toast.makeText(this, "Could not import image: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
             return;
         }
-        if (r.state == VirtualCameraProbe.State.SUPPORTED) {
-            new android.app.AlertDialog.Builder(this)
-                    .setTitle("Framework supported — permission blocked")
-                    .setMessage("This phone reports virtual-camera support, but Android has not granted AvatarCam the privileged virtual-device role. A normal APK cannot silently grant itself that role. The next route is a supported system role or a device-level/root helper.")
-                    .setPositiveButton("OK", null)
-                    .setNeutralButton("App settings", (d, w) -> {
-                        Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
-                        startActivity(i);
-                    })
-                    .show();
-        } else {
-            new android.app.AlertDialog.Builder(this)
-                    .setTitle("System-wide mode unavailable")
-                    .setMessage("Your current Android build does not expose a usable virtual-camera path to this normal APK. The selected avatar is working locally; replacing the front camera in other apps requires a device-level helper on this firmware.")
-                    .setPositiveButton("OK", null)
-                    .show();
+
+        if (requestCode == TEST_CAMERA) {
+            if (resultCode == RESULT_OK) {
+                if (data != null && data.getExtras() != null) {
+                    Object result = data.getExtras().get("data");
+                    if (result instanceof Bitmap) {
+                        preview.setImageBitmap((Bitmap) result);
+                    }
+                }
+                Toast.makeText(this, "Camera chooser returned an image successfully.", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, "Camera test cancelled.", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }
